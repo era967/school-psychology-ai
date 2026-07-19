@@ -88,9 +88,9 @@ else:
             X_batch_scaled = scaler.transform(X_batch)
             batch_predictions = model.predict(X_batch_scaled)
             
-                       input_df['ИИ_Қорытындысы (Risk_Level)'] = le.inverse_transform(batch_predictions)
+            input_df['ИИ_Қорытындысы (Risk_Level)'] = le.inverse_transform(batch_predictions)
             
-            # --- ОСПЫ БӨЛІК ТОЛЫҚТАЙ АУЫСТЫРЫЛДЫ (Надежный перевод по номерам колонок) ---
+            # Надежный перевод по номерам колонок
             kz_headers = [
                 'Оқушы ID-і',
                 'LMS-ке кіру жиілігі (аптасына)',
@@ -104,29 +104,8 @@ else:
                 'ИИ Қорытындысы (Вердикт ИИ)'
             ]
             
-            # Создаем копию таблицы и принудительно перезаписываем заголовки по порядку
             display_df = input_df.copy()
             display_df.columns = kz_headers[:len(display_df.columns)]
-            # ----------------------------------------------------------------------------
-            
-            st.subheader("🚀 Талдау нәтижесі (ИИ әр оқушыны есептеп шықты):")
-            st.write(display_df)
-
-            
-            # Перевод колонок на казахский язык
-            ru_columns = {
-                'Student_ID': 'Оқушы ID-і',
-                'LMS_Login_Frequency': 'LMS-ке кіру жиілігі (аптасына)',
-                'Avg_Assignment_Delay_Hours': 'Тапсырма кешігуі (сағатпен)',
-                'Screen_Time_Hours_Daily': 'Экран уақыты (күнделікті, сағат)',
-                'Night_Activity_Score': 'Түнгі белсенділік (1-10 балл)',
-                'Math_Grade': 'Математика бағасы',
-                'Language_Grade': 'Тілдік пәндер бағасы',
-                'Attendance_Rate': 'Сабаққа қатысуы (%)',
-                'Risk_Level': 'Шын мәніндегі қауіп (Настоящий риск)',
-                'ИИ_Қорытындысы (Risk_Level)': 'ИИ Қорытындысы (Вердикт ИИ)'
-            }
-            display_df = input_df.rename(columns=ru_columns)
             
             st.subheader("🚀 Талдау нәтижесі (ИИ әр оқушыны есептеп шықты):")
             st.write(display_df)
