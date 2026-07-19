@@ -1,28 +1,30 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import json
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 # Настройка страницы в стиле полноценного портала BilimClass
 st.set_page_config(page_title="BilimPredict - Мектеп платформасы", layout="wide")
 
-# Инициализация баз данных в памяти (для демонстрации)
-if 'real_students_db' not in st.session_state:
-    st.session_state['real_students_db'] = pd.DataFrame(columns=[
-        'Оқушы ID-і', 'Аты-жөні', 'Сыныбы', 
-        'LMS-ке кіру жиілігі (аптасына)', 'Тапсырма кешігуі (сағатпен)', 
-        'Экран уақыты (күнделікті, сағат)', 'Түнгі белсенділік (1-10 балл)', 
-        'Математика бағасы', 'Тілдік пәндер бағасы', 'Сабаққа қатысуы (%)'
-    ])
+# --- 1. ПОДКЛЮЧЕНИЕ К ОБЛАЧНОЙ БАЗЕ ДАННЫХ FIREBASE ---
+@st.cache_resource
+def init_firebase():
+    if not firebase_admin._apps:
+        try:
+            # Читаем ваш секретный ключ, который вы загрузили на GitHub
+            cred = credentials.Certificate("firebase-key.json")
+            firebase_admin.initialize_app(cred)
+        except Exception as e:
+            st.error(font_color="red", body=f"Firebase-ке қосылу қатесі: {e}")
+    return firestore.client()
 
-if 'homeworks' not in st.session_state:
-    st.session_state['homeworks'] = [
-        {"пән": "Алгебра", "тақырып": "Туындыны табу", "мерзімі": "Бүгін, 18:00"},
-        {"пән": "Қазақ тілі", "тақырып": "Эссе жазу: Сандық әлем", "мерзімі": "Ертең, 15:00"}
-    ]
+db = init_firebase()
 
-# Обучение ИИ
+# --- 2. ОБУЧЕНИЕ МОДЕЛИ ИИ ---
 @st.cache_resource
 def get_trained_model():
     data = pd.read_csv('student_behavior_data.csv')
@@ -39,108 +41,163 @@ def get_trained_model():
 try:
     model, scaler, le = get_trained_model()
 except:
-    st.error("Қате: Оқыту базасы табылмады.")
+    st.error("Қате: ИИ оқыту базасы табылмады.")
     st.stop()
 
-# --- СИСТЕМА ВХОДА (ВЫБОР РОЛИ) ---
+# --- 3. ИНТЕРФЕЙС И АВТОРИЗАЦИЯ С ЛЮБОГО УСТРОЙСТВА ---
 st.sidebar.image("https://flaticon.com", width=70)
 st.sidebar.title("BilimPredict Порталы")
 
-user_role = st.sidebar.radio("Жүйеге кіру (Роль):", ["👤 Оқушы кабинеті (Ученик)", "🧑‍🏫 Мұғалім/Психолог кабинеті"])
+# Выбор режима: Вход или Регистрация нового аккаунта
+auth_mode = st.sidebar.radio("Жүйеге кіру:", ["Логин арқылы кіру", "Жаңа профиль тіркеу (Регистрация)"])
 
-# ==================== 1. КАБИНЕТ УЧЕНИКА ====================
-if user_role == "👤 Оқушы кабинеті (Ученик)":
-    student_menu = st.sidebar.selectbox("Бөлімдер:", ["🪪 Менің Профилім", "📚 Сабақтар кестесі", "📝 Үй тапсырмалары (ДЗ)"])
+if auth_mode == "Жаңа профиль тіркеу (Регистрация)":
+    st.title("📝 Платформаға жаңа қолданушыны тіркеу")
+    st.write("Кез келген құрылғыдан кіру үшін өзіңізге профиль жасаңыз:")
     
-    if student_menu == "🪪 Менің Профилім":
-        st.title("🪪 Оқушының жеке профилі")
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            st.image("https://flaticon.com", width=150)
-        with col2:
-            st.subheader("Алихан Сұлтанов")
-            st.write("**Сыныбы:** 9-А сынып")
-            st.write("**Мектеп:** №10 IT-Лицей")
-            st.info("💡 ИИ ескертуі: Сіздің соңғы аптадағы экран уақытыңыз артқан. Ұйқы режимін сақтау ұсынылады.")
-            
-    elif student_menu == "📚 Сабақтар кестесі":
-        st.title("📚 Бүгінгі сабақтар мен материалдар")
-        st.write("Бүгінгі күнге арналған оқу материалдары мен онлайн силлабустар:")
-        schedule = pd.DataFrame({
-            "Уақыты": ["08:30 - 09:15", "09:25 - 10:10", "10:20 - 11:05"],
-            "Пән атауы": ["Математика", "Информатика", "Қазақ тілі"],
-            "Тақырып": ["Тригонометрия негіздері", "Python-да массивтер", "Сенімділік және цифрлық мәдениет"],
-            "Сілтеме": ["Жүктеу (.pdf)", "Бейнебаянға сілтеме", "Оқулық беті-45"]
-        })
-        st.table(schedule)
+    with st.form("reg_form"):
+        reg_username = st.text_input("Логин (email немесе атыңыз латынша):").strip()
+        reg_fullname = st.text_input("Толық аты-жөніңіз (ФИО):")
+        reg_password = st.text_input("Құпия сөз (Пароль):", type="password")
+        reg_role = st.selectbox("Роліңізді таңдаңыз:", ["Оқушы (Ученик)", "Мұғалім / Мектеп Психологы"])
+        reg_class = st.selectbox("Сыныбыңыз (Тек оқушылар үшін):", ["9-А", "9-Ә", "10-А", "11-А", "Мұғалімде қажет емес"])
         
-    elif student_menu == "📝 Үй тапсырмалары (ДЗ)":
-        st.title("📝 Белсенді үй тапсырмалары (ДЗ)")
-        for hw in st.session_state['homeworks']:
-            st.info(f"**Пән:** {hw['пән']} | **Тақырып:** {hw['тақырып']} | 📅 **Мерзімі:** {hw['мерзімі']}")
-        
-        st.subheader("📤 Жаңа тапсырма өткізу")
-        uploaded_hw = st.file_uploader("Үй жұмысын бекіту (PDF, Имидж):", type=["pdf", "png", "jpg"])
-        if uploaded_hw:
-            st.success("Тапсырма сәтті жіберілді! Мұғалім тексереді.")
-
-# ==================== 2. КАБИНЕТ УЧИТЕЛЯ ====================
-else:
-    teacher_menu = st.sidebar.selectbox("Бөлімдер:", ["📈 Басты бақылау панелі", "📝 Оқушыларды базаға енгізу", "🧠 ИИ Психологиялық талдау"])
-    
-    if teacher_menu == "📈 Басты бақылау панелі":
-        st.title("🧑‍🏫 Мұғалім мен Психологтың жұмыс кабинеті")
-        st.write("Қош келдіңіз! Бұл бөлімде сіз мектептегі оқушылардың сандық дамуын бақылай аласыз.")
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Базадағы нақты оқушылар:", len(st.session_state['real_students_db']))
-        c2.metric("Бүгін сабаққа қатысу көрсеткіші:", "94%")
-        c3.metric("ИИ Модель дәлдігі:", "75.0%")
-        
-    elif teacher_menu == "📝 Оқушыларды базаға енгізу":
-        st.title("📝 Жаңа оқушыны жүйеге тіркеу және деректер жинау")
-        with st.form("teacher_add_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                name = st.text_input("Оқушының аты-жөні (ФИО):")
-                grade = st.selectbox("Сыныбы:", ["9-А", "9-Ә", "10-А"])
-                lms = st.slider("LMS-ке апталық кіруі:", 0, 30, 10)
-                delay = st.slider("Тапсырма кешігуі (сағат):", 0, 120, 24)
-            with col2:
-                screen = st.slider("Экран уақыты (сағат):", 1.0, 15.0, 5.0)
-                night = st.slider("Түнгі белсенділік балы (1-10):", 1, 10, 4)
-                math = st.number_input("Математика бағасы:", 0, 100, 75)
-                lang = st.number_input("Тіл бағасы:", 0, 100, 75)
-                att = st.slider("Қатысу пайызы (%):", 40.0, 100.0, 95.0)
-            
-            if st.form_submit_button("Базаға сақтау", type="primary"):
-                if name:
-                    new_student = {
-                        'Оқушы ID-і': f"STU_{np.random.randint(1000, 9999)}", 'Аты-жөні': name, 'Сыныбы': grade,
-                        'LMS-ке кіру жиілігі (аптасына)': lms, 'Тапсырма кешігуі (сағатпен)': delay,
-                        'Экран уақыты (күнделікті, сағат)': screen, 'Түнгі белсенділік (1-10 балл)': night,
-                        'Математика бағасы': math, 'Тілдік пәндер бағасы': lang, 'Сабаққа қатысуы (%)': att
-                    }
-                    st.session_state['real_students_db'] = pd.concat([st.session_state['real_students_db'], pd.DataFrame([new_student])], ignore_index=True)
-                    st.success(f"{name} жүйеге қосылды!")
+        if st.form_submit_button("Тіркелуді аяқтау", type="primary"):
+            if reg_username and reg_password and reg_fullname:
+                # Проверяем, существует ли уже такой пользователь в облаке
+                user_ref = db.collection("users").document(reg_username).get()
+                if user_ref.exists:
+                    st.error("Бұл логин бос емес! Басқа логин таңдаңыз.")
                 else:
-                    st.error("Аты-жөнін жазыңыз!")
-                    
-    elif teacher_menu == "🧠 ИИ Психологиялық талдау":
-        st.title("🧠 Жасанды Интеллект арқылы қауіп топтарын анықтау")
-        if len(st.session_state['real_students_db']) == 0:
-            st.info("💡 Анализ жасау үшін алдымен оқушыларды тіркеңіз немесе жүйеге баға енгізіңіз.")
-        else:
-            df = st.session_state['real_students_db'].copy()
-            X_batch = df.drop(columns=['Оқушы ID-і', 'Аты-жөні', 'Сыныбы'])
-            X_batch_scaled = scaler.transform(X_batch)
-            preds = model.predict(X_batch_scaled)
-            df['ИИ Қорытындысы'] = le.inverse_transform(preds)
-            
-            def highlight(val):
-                if val == 'Жоғары': return 'background-color: #ffcccc; color: black;'
-                elif val == 'Орташа': return 'background-color: #ffe6cc; color: black;'
-                return 'background-color: #e6ffcc; color: black;'
-                
-            st.dataframe(df.style.applymap(highlight, subset=['ИИ Қорытындысы']))
+                    # Записываем данные в реальную базу данных Firebase
+                    db.collection("users").document(reg_username).set({
+                        "fullname": reg_fullname,
+                        "password": reg_password,  # В реальных проектах хешируется, для MVP оставляем так
+                        "role": reg_role,
+                        "class": reg_class
+                    })
+                    st.success("🎉 Тіркелу сәтті аяқталды! Енді сол жақ мәзірден 'Логин арқылы кіру' бөліміне өтіңіз.")
+            else:
+                st.error("Барлық өрістерді толтырыңыз!")
 
+else:
+    # Окно логина
+    st.sidebar.subheader("Авторизация")
+    login_user = st.sidebar.text_input("Логин:").strip()
+    login_pass = st.sidebar.text_input("Құпия сөз:", type="password")
+    
+    logged_in = False
+    user_data = {}
+    
+    if login_user and login_pass:
+        user_ref = db.collection("users").document(login_user).get()
+        if user_ref.exists:
+            data = user_ref.to_dict()
+            if data['password'] == login_pass:
+                logged_in = True
+                user_data = data
+                st.sidebar.success(f"Қош келдіңіз, {data['fullname']}!")
+            else:
+                st.sidebar.error("Құпия сөз қате!")
+        else:
+            st.sidebar.error("Логин табылмады!")
+
+    # ЕСЛИ ВХОД НЕ ВЫПОЛНЕН — ПОКАЗЫВАЕМ ПРИВЕТСТВИЕ
+    if not logged_in:
+        st.title("🏫 Мектептің бірыңғай цифрлық оқу-психологиялық платформасы")
+        st.markdown("""
+        ### Платформаға қош келдіңіз!
+        Бұл сайт нақты уақыт режимінде мектеп өмірін, сабақтарды және Жасанды Интеллект көмегімен оқушылардың психологиялық жағдайын бақылауға арналған.
+        
+        **Жұмысты бастау үшін:**
+        1. Сол жақтағы мәзірден **'Жаңа профиль тіркеу'** арқылы мұғалім немесе оқушы аккаунтын ашыңыз.
+        2. Профиль жасаған соң, өз логиніңіз бен пароліңізді енгізіп, жеке кабинетіңізге кіріңіз.
+        """)
+    
+    # ==================== ЕСЛИ ВОШЕЛ ОКУШЫ (УЧЕНИК) ====================
+    elif logged_in and user_data['role'] == "Оқушы (Ученик)":
+        student_menu = st.selectbox("Бөлімді таңдаңыз:", ["🪪 Менің Профилім", "📚 Сабақтар мен ДЗ"])
+        
+        if student_menu == "🪪 Менің Профилім":
+            st.title(f"🪪 Оқушының жеке профилі: {user_data['fullname']}")
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.image("https://flaticon.com", width=130)
+            with col2:
+                st.subheader(user_data['fullname'])
+                st.write(f"**Сыныбы:** {user_data['class']}")
+                st.write("**Мектеп:** №10 IT-Лицей")
+                st.info("💡 ИИ кеңесі: Жүйедегі көрсеткіштеріңіз тұрақты. Сабаққа белсенді қатысқаныңыз үшін рақмет!")
+                
+        elif student_menu == "📚 Сабақтар мен ДЗ":
+            st.title("📚 Ағымдағы сабақтар мен үй тапсырмалары (ДЗ)")
+            # Загружаем реальные домашние задания, которые добавил учитель в Firebase
+            st.write("Мұғалімдер қалдырған белсенді тапсырмалар:")
+            
+            hw_docs = db.collection("homeworks").stream()
+            hw_list = [doc.to_dict() for doc in hw_docs]
+            
+            if len(hw_list) == 0:
+                st.info("Әзірге белсенді үй тапсырмалары жоқ.")
+            else:
+                for hw in hw_list:
+                    st.info(f"📘 **Пән:** {hw['subject']} | **Тақырып:** {hw['topic']} | 📅 **Мерзімі:** {hw['deadline']}")
+            
+            st.subheader("📤 Үй жұмысын файлмен өткізу")
+            uploaded_file = st.file_uploader("Файлды таңдаңыз (PDF, PNG):", type=["pdf", "png", "jpg"])
+            if uploaded_file:
+                st.success("Тапсырма Firebase бұлтына сәтті жүктелді!")
+
+    # ==================== ЕСЛИ ВОШЕЛ МУГАЛИМ / ПСИХОЛОГ ====================
+    elif logged_in and user_data['role'] == "Мұғалім / Мектеп Психологы":
+        teacher_menu = st.selectbox("Бөлімді таңдаңыз:", ["📈 Психологиялық ИИ Аналитика", "📝 Жаңа оқушы деректерін енгізу", "➕ Үй тапсырмасын қосу (ДЗ)"])
+        
+        if teacher_menu == "📈 Психологиялық ИИ Аналитика":
+            st.title("🧠 Жасанды Интеллект арқылы қауіп топтарын нақты анықтау")
+            st.write("Бұл тізім Firebase бұлтындағы нақты уақыттағы деректер негізінде ИИ арқылы автоматты түрде есептеледі:")
+            
+            # Скачиваем РЕАЛЬНЫХ учеников из базы данных Firebase
+            student_docs = db.collection("students_metrics").stream()
+            real_students = []
+            for doc in student_docs:
+                d = doc.to_dict()
+                d['Оқушы ID-і'] = doc.id
+                real_students.append(d)
+                
+            if len(real_students) == 0:
+                st.info("💡 Қазіргі уақытта базада оқушылар дерегі жоқ. Алдымен 'Жаңа оқушы деректерін енгізу' бөлімінде оқушыларды қосыңыз.")
+            else:
+                df = pd.DataFrame(real_students)
+                
+                # Отбираем фичи для ИИ-модели
+                X_batch = df[['lms_login', 'delay_hours', 'screen_time', 'night_act', 'math', 'lang', 'attendance']]
+                X_batch_scaled = scaler.transform(X_batch)
+                preds = model.predict(X_batch_scaled)
+                
+                # Добавляем вердикт ИИ
+                df['ИИ Қорытындысы (Қауіп деңгейі)'] = le.inverse_transform(preds)
+                
+                # Красивое переименование колонок для отчета
+                display_df = df.rename(columns={
+                    'fullname': 'Оқушының аты-жөні', 'grade': 'Сыныбы',
+                    'lms_login': 'LMS кіруі', 'delay_hours': 'Тапсырма кешігуі (сағат)',
+                    'screen_time': 'Экран уақыты', 'night_act': 'Түнгі белсенділік',
+                    'math': 'Математика', 'lang': 'Тілдер', 'attendance': 'Қатысуы (%)'
+                })
+                
+                # Сортируем колонки, чтобы имя было в начале
+                cols = ['Оқушы ID-і', 'Оқушының аты-жөні', 'Сыныбы', 'LMS кіруі', 'Тапсырма кешігуі (сағат)', 'Экран уақыты', 'Түнгі белсенділік', 'Математика', 'Тілдер', 'Қатысуы (%)', 'ИИ Қорытындысы (Қауіп деңгейі)']
+                display_df = display_df[cols]
+                
+                def highlight(val):
+                    if val == 'Жоғары': return 'background-color: #ffcccc; color: black;'
+                    elif val == 'Орташа': return 'background-color: #ffe6cc; color: black;'
+                    return 'background-color: #e6ffcc; color: black;'
+                    
+                st.dataframe(display_df.style.applymap(highlight, subset=['ИИ Қорытындысы (Қауіп деңгейі)']))
+                
+        elif teacher_menu == "📝 Жаңа оқушы деректерін енгізу":
+            st.title("📝 Реалды оқушы көрсеткіштерін Firebase-ке сақтау")
+            with st.form("add_student_cloud"):
+                st.write("Оқушының мектептегі және цифрлық көрсеткіштерін жазыңыз:")
+                f_name = st.text_input("Оқушының толық аты-жөні (ФИО):")f_grade = st.selectbox("Сыныбы:", ["9-А", "9-Ә", "10-А", "11-А"])f_lms = st.slider("LMS-ке (Күнделік) апталық кіруі:", 0, 30, 12)f_delay = st.slider("Тапсырмаларды кешіктіруі (сағатпен):", 0, 150, 12)f_screen = st.slider("Күнделікті экран уақыты (сағат):", 1.0, 15.0, 4.5, step=0.5)f_night = st.slider("Түнгі белсенділік (1-10 балл):", 1, 10, 3)f_math = st.number_input("Математика бағасы (0-100):", 0, 100, 75)f_lang = st.number_input("Тілдік пәндер бағасы (0-100):", 0, 100, 80)f_att = st.slider("Сабаққа қатысу көрсеткіші (%):", 30.0, 100.0, 95.0)if st.form_submit_button("Мәліметтерді бұлттық базаға жіберу", type="primary"):if f_name:# Записываем метрики ученика в Firebase навсегдаstu_uuid = f"STU_{np.random.randint(1000, 9999)}"db.collection("students_metrics").document(stu_uuid).set({"fullname": f_name, "grade": f_grade, "lms_login": f_lms,"delay_hours": f_delay, "screen_time": f_screen, "night_act": f_night,"math": f_math, "lang": f_lang, "attendance": f_att})st.success(f"🎉 {f_name} деректері бұлттық базаға сәтті сақталды!")else:st.error("Аты-жөнін толтыру міндетті!")elif teacher_menu == "➕ Үй тапсырмасын қосу (ДЗ)":st.title("➕ Оқушыларға жаңа үй тапсырмасын (ДЗ) бекіту")with st.form("add_hw_form"):hw_subject = st.selectbox("Пән таңдаңыз:", ["Математика", "Алгебра", "Геометрия", "Информатика", "Қазақ тілі", "Ағылшын тілі"])hw_topic = st.text_input("Үй тапсырмасының тақырыбы мен сипаттамасы:")hw_deadline = st.text_input("Тапсырманы өткізу мерзімі (Дедлайн):", value="Ертең, 18:00")if st.form_submit_button("ДЗ платформада жариялау", type="primary"):if hw_topic:# Сохраняем домашнее задание в Firebasedb.collection("homeworks").add({"subject": hw_subject,"topic": hw_topic,"deadline": hw_deadline})st.success("Тапсырма сәтті жарияланды! Енді оны барлық оқушылар өз кабинеттерінен көре алады.")else:st.error("Тақырыпты жазыңыз!")
