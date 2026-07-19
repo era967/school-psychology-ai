@@ -203,8 +203,7 @@ else:
                 submit_student = st.form_submit_button("Мәліметтерді бұлттық базаға жіберу", type="primary")
                 if submit_student:
                     if f_name:
-                        stu_uuid = f"STU_{np.random.randint(1000, 9999)}"
-                        db.collection("students_metrics").document(stu_uuid).
+                        stu_uuid = f"STU_{np.random.randint(1000, 9999)}"db.collection("students_metrics").document(stu_uuid).
                         set({"fullname": f_name, "grade": f_grade, "lms_login": f_lms,"delay_hours": f_delay, "screen_time": f_screen, "night_act": f_night,"math": f_math, "lang": f_lang, "attendance": f_att})
                         st.success(f"🎉 {f_name} деректері бұлттық базаға сәтті сақталды!")
                     else:st.error("Аты-жөнін толтыру міндетті!")
