@@ -202,7 +202,7 @@ else:
                 f_att = st.slider("Сабаққа қатысу көрсеткіші (%):", 30.0, 100.0, 95.0)
                 submit_student = st.form_submit_button("Мәліметтерді бұлттық базаға жіберу", type="primary")
                 if submit_student:
-                                    if f_name:
+                if f_name:
                     stu_uuid = f"STU_{np.random.randint(1000, 9999)}"
                     db.collection("students_metrics").document(stu_uuid).set({
                         "fullname": f_name, "grade": f_grade, "lms_login": f_lms,
