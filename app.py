@@ -210,11 +210,13 @@ else:
                         "math": f_math, "lang": f_lang, "attendance": f_att
                     })
                     st.success(f"🎉 {f_name} деректері бұлттық базаға сәтті сақталды!")
-                else:
+                                else:
                     st.error("Аты-жөнін толтыру міндетті!")
-                    elif teacher_menu == "➕ Үй тапсырмасын қосу (ДЗ)":
-                            st.title("➕ Оқушыларға жаңа үй тапсырмасын (ДЗ) бекіту")
-                            with st.form("add_hw_form"):
+                        
+        elif teacher_menu == "➕ Үй тапсырмасын қосу (ДЗ)":
+            st.title("➕ Оқушыларға жаңа үй тапсырмасын (ДЗ) бекіту")
+            with st.form("add_hw_form"):
+
                                 hw_subject = st.selectbox("Пән таңдаңыз:", ["Математика", "Алгебра", "Геометрия", "Информатика", "Қазақ тілі", "Ағылшын тілі"])
                                 hw_topic = st.text_input("Үй тапсырмасының тақырыбы мен сипаттамасы:")
                                 hw_deadline = st.text_input("Тапсырманы өткізу мерзімі (Дедлайн):",value="Ертең, 18:00")
