@@ -199,4 +199,24 @@ else:
                 f_night = st.slider("Түнгі белсенділік (1-10 балл):", 1, 10, 3)
                 f_math = st.number_input("Математика бағасы (0-100):", 0, 100, 75)
                 f_lang = st.number_input("Тілдік пәндер бағасы (0-100):", 0, 100, 80)
-                f_att = st.slider("Сабаққа қатысу көрсеткіші (%):", 30.0, 100.0, 95.0)submit_student = st.form_submit_button("Мәліметтерді бұлттық базаға жіберу", type="primary")if submit_student:if f_name:stu_uuid = f"STU_{np.random.randint(1000, 9999)}"db.collection("students_metrics").document(stu_uuid).set({"fullname": f_name, "grade": f_grade, "lms_login": f_lms,"delay_hours": f_delay, "screen_time": f_screen, "night_act": f_night,"math": f_math, "lang": f_lang, "attendance": f_att})st.success(f"🎉 {f_name} деректері бұлттық базаға сәтті сақталды!")else:st.error("Аты-жөнін толтыру міндетті!")elif teacher_menu == "➕ Үй тапсырмасын қосу (ДЗ)":st.title("➕ Оқушыларға жаңа үй тапсырмасын (ДЗ) бекіту")with st.form("add_hw_form"):hw_subject = st.selectbox("Пән таңдаңыз:", ["Математика", "Алгебра", "Геометрия", "Информатика", "Қазақ тілі", "Ағылшын тілі"])hw_topic = st.text_input("Үй тапсырмасының тақырыбы мен сипаттамасы:")hw_deadline = st.text_input("Тапсырманы өткізу мерзімі (Дедлайн):", value="Ертең, 18:00")if st.form_submit_button("ДЗ платформада жариялау", type="primary"):if hw_topic:db.collection("homeworks").add({"subject": hw_subject,"topic": hw_topic,"deadline": hw_deadline})st.success("Тапсырма сәтті жарияланды! Енді оны барлық оқушылар өз кабинеттерінен көре алады.")else:st.error("Тақырыпты жазыңыз!")
+                f_att = st.slider("Сабаққа қатысу көрсеткіші (%):", 30.0, 100.0, 95.0)
+                submit_student = st.form_submit_button("Мәліметтерді бұлттық базаға жіберу", type="primary")
+                if submit_student:
+                    if f_name:
+                        stu_uuid = f"STU_{np.random.randint(1000, 9999)}"
+                        db.collection("students_metrics").
+                        document(stu_uuid).
+                        set({"fullname": f_name, "grade": f_grade, "lms_login": f_lms,"delay_hours": f_delay, "screen_time": f_screen, "night_act": f_night,"math": f_math, "lang": f_lang, "attendance": f_att})
+                        st.success(f"🎉 {f_name} деректері бұлттық базаға сәтті сақталды!")
+                    else:st.error("Аты-жөнін толтыру міндетті!")
+                        elif teacher_menu == "➕ Үй тапсырмасын қосу (ДЗ)":
+                            st.title("➕ Оқушыларға жаңа үй тапсырмасын (ДЗ) бекіту")
+                            with st.form("add_hw_form"):
+                                hw_subject = st.selectbox("Пән таңдаңыз:", ["Математика", "Алгебра", "Геометрия", "Информатика", "Қазақ тілі", "Ағылшын тілі"])
+                                hw_topic = st.text_input("Үй тапсырмасының тақырыбы мен сипаттамасы:")
+                                hw_deadline = st.text_input("Тапсырманы өткізу мерзімі (Дедлайн):",value="Ертең, 18:00")
+                                if st.form_submit_button("ДЗ платформада жариялау", type="primary"):
+                                    if hw_topic:db.collection("homeworks").add({"subject": hw_subject,"topic": hw_topic,"deadline": hw_deadline})
+                                        st.success("Тапсырма сәтті жарияланды! Енді оны барлық оқушылар өз кабинеттерінен көре алады.")
+                                else:
+                                    st.error("Тақырыпты жазыңыз!")
